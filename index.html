@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking Detection & Violation System</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --dark-bg: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-light: #ecf0f1;
+            --border-color: #444;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: rgba(44, 62, 80, 0.95) !important;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid var(--secondary-color);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--text-light) !important;
+        }
+        
+        .card {
+            background: rgba(45, 45, 45, 0.9);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: rgba(52, 152, 219, 0.2);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        
+        .video-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .video-stream {
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+            object-fit: contain;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-active {
+            background-color: var(--success-color);
+        }
+        
+        .status-inactive {
+            background-color: var(--danger-color);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .stat-card {
+            background: linear-gradient(145deg, #3498db, #2980b9);
+            border: none;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+        
+        .stat-card.warning {
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+        }
+        
+        .stat-card.danger {
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        .stat-card.success {
+            background: linear-gradient(145deg, #27ae60, #229954);
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .control-btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            border: none;
+            margin: 5px;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-start {
+            background: linear-gradient(145deg, #27ae60, #229954);
+        }
+        
+        .btn-stop {
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+        }
+        
+        .btn-config {
+            background: linear-gradient(145deg, #9b59b6, #8e44ad);
+        }
+        
+        .btn-screenshot {
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+        }
+        
+        .violation-alert {
+            background: rgba(231, 76, 60, 0.9);
+            border: 2px solid #e74c3c;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            animation: flash 2s infinite;
+        }
+        
+        @keyframes flash {
+            0%, 50%, 100% { background-color: rgba(231, 76, 60, 0.9); }
+            25%, 75% { background-color: rgba(231, 76, 60, 0.5); }
+        }
+        
+        .violation-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        
+        .violation-item {
+            background: rgba(231, 76, 60, 0.2);
+            border-left: 4px solid #e74c3c;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        .performance-chart {
+            height: 200px !important;
+        }
+        
+        .config-modal .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+        }
+        
+        .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--text-light);
+        }
+        
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--secondary-color);
+            color: var(--text-light);
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+            font-weight: 500;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid var(--secondary-color);
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .timestamp {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .stat-number {
+                font-size: 1.8rem;
+            }
+            
+            .control-btn {
+                padding: 8px 16px;
+                font-size: 0.85rem;
+            }
+            
+            .video-stream {
+                max-height: 300px;
+            }
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--secondary-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-video me-2"></i>
+                Smart Parking Detection System
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <span class="nav-link">
+                            <span id="connection-status" class="status-indicator status-inactive"></span>
+                            <span id="connection-text">Disconnected</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Alert Messages -->
+        <div id="alert-container"></div>
+        
+        <div class="row">
+            <!-- Video Stream Column -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-camera me-2"></i>
+                            Live Camera Feed
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="video-container">
+                            <img id="video-stream" class="video-stream" src="/video_feed" alt="Camera Feed">
+                            <div class="video-overlay">
+                                <div id="video-info">
+                                    <span id="detection-status">Detection: Inactive</span><br>
+                                    <span id="fps-counter">FPS: 0</span><br>
+                                    <span id="timestamp" class="timestamp"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="row text-center">
+                            <div class="col-6 col-md-3">
+                                <button id="btn-start" class="btn control-btn btn-start w-100">
+                                    <i class="fas fa-play me-2"></i>Start
+                                </button>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <button id="btn-stop" class="btn control-btn btn-stop w-100">
+                                    <i class="fas fa-stop me-2"></i>Stop
+                                </button>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <button id="btn-screenshot" class="btn control-btn btn-screenshot w-100">
+                                    <i class="fas fa-camera me-2"></i>Screenshot
+                                </button>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <button id="btn-config" class="btn control-btn btn-config w-100" data-bs-toggle="modal" data-bs-target="#configModal">
+                                    <i class="fas fa-cog me-2"></i>Config
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Statistics Column -->
+            <div class="col-lg-4">
+                <!-- Current Statistics -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Current Statistics
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="stat-card success">
+                                    <p class="stat-number" id="available-slots">0</p>
+                                    <p class="stat-label">Available Slots</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-card">
+                                    <p class="stat-number" id="vehicles-in-grid">0</p>
+                                    <p class="stat-label">In Parking</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-card">
+                                    <p class="stat-number" id="total-vehicles">0</p>
+                                    <p class="stat-label">Total Vehicles</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Violation Alerts -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Violation Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="stat-card warning">
+                                    <p class="stat-number" id="potential-violations">0</p>
+                                    <p class="stat-label">Potential</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-card danger">
+                                    <p class="stat-number" id="confirmed-violations">0</p>
+                                    <p class="stat-label">Confirmed</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="violation-alerts"></div>
+                        
+                        <div class="violation-list">
+                            <div id="violation-details">
+                                <p class="text-muted text-center">No active violations</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Performance Monitor -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tachometer-alt me-2"></i>
+                            Performance Monitor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="performance-chart" class="performance-chart"></canvas>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <span id="perf-detection">Detection: 0ms</span> | 
+                                <span id="perf-fps">FPS: 0</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div class="modal fade config-modal" id="configModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-cog me-2"></i>
+                        System Configuration
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="config-form">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Parking Grid Coordinates</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label class="form-label">X1:</label>
+                                        <input type="number" class="form-control" id="grid-x1" value="0">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Y1:</label>
+                                        <input type="number" class="form-control" id="grid-y1" value="185">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">X2:</label>
+                                        <input type="number" class="form-control" id="grid-x2" value="810">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Y2:</label>
+                                        <input type="number" class="form-control" id="grid-y2" value="450">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Detection Parameters</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Confidence Threshold:</label>
+                                    <input type="range" class="form-range" id="confidence-threshold" min="0.1" max="1" step="0.1" value="0.4">
+                                    <small class="text-muted">Current: <span id="confidence-value">0.4</span></small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Violation Buffer Time (seconds):</label>
+                                    <input type="number" class="form-control" id="violation-buffer" value="3.0" step="0.1">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Slot Length (cm):</label>
+                                    <input type="number" class="form-control" id="slot-length" value="150">
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-config">Save Configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Global variables
+        let socket;
+        let performanceChart;
+        let isDetectionActive = false;
+        
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeChart();
+            setupEventListeners();
+            loadConfiguration();
+            updateTimestamp();
+            
+            // Update timestamp every second
+            setInterval(updateTimestamp, 1000);
+        });
+        
+        // Socket.IO initialization
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                updateConnectionStatus(true);
+                showAlert('Connected to server', 'success');
+            });
+            
+            socket.on('disconnect', function() {
+                updateConnectionStatus(false);
+                showAlert('Disconnected from server', 'warning');
+            });
+            
+            socket.on('detection_update', function(data) {
+                updateStatistics(data);
+                updateViolations(data.violations);
+                updatePerformanceChart(data.performance);
+            });
+            
+            socket.on('connected', function(data) {
+                console.log('Socket connected:', data.status);
+            });
+        }
+        
+        // Initialize performance chart
+        function initializeChart() {
+            const ctx = document.getElementById('performance-chart').getContext('2d');
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Processing FPS',
+                        data: [],
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Detection Time (ms)',
+                        data: [],
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ecf0f1'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#ecf0f1' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: { color: '#ecf0f1' },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: { color: '#ecf0f1' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Setup event listeners
+        function setupEventListeners() {
+            document.getElementById('btn-start').addEventListener('click', startDetection);
+            document.getElementById('btn-stop').addEventListener('click', stopDetection);
+            document.getElementById('btn-screenshot').addEventListener('click', captureScreenshot);
+            document.getElementById('save-config').addEventListener('click', saveConfiguration);
+            
+            // Confidence threshold slider
+            document.getElementById('confidence-threshold').addEventListener('input', function(e) {
+                document.getElementById('confidence-value').textContent = e.target.value;
+            });
+        }
+        
+        // API calls
+        async function startDetection() {
+            if (isDetectionActive) return;
+            
+            const btn = document.getElementById('btn-start');
+            btn.innerHTML = '<div class="loading-spinner"></div>Starting...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/start_detection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    isDetectionActive = true;
+                    updateDetectionStatus(true);
+                    showAlert('Detection started successfully', 'success');
+                } else {
+                    showAlert('Failed to start detection: ' + data.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error starting detection: ' + error.message, 'danger');
+            }
+            
+            btn.innerHTML = '<i class="fas fa-play me-2"></i>Start';
+            btn.disabled = false;
+        }
+        
+        async function stopDetection() {
+            if (!isDetectionActive) return;
+            
+            const btn = document.getElementById('btn-stop');
+            btn.innerHTML = '<div class="loading-spinner"></div>Stopping...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/stop_detection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    isDetectionActive = false;
+                    updateDetectionStatus(false);
+                    showAlert('Detection stopped successfully', 'success');
+                } else {
+                    showAlert('Failed to stop detection: ' + data.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error stopping detection: ' + error.message, 'danger');
+            }
+            
+            btn.innerHTML = '<i class="fas fa-stop me-2"></i>Stop';
+            btn.disabled = false;
+        }
+        
+        async function captureScreenshot() {
+            try {
+                const response = await fetch('/api/capture_screenshot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('Screenshot saved: ' + data.filename, 'success');
+                } else {
+                    showAlert('Failed to capture screenshot: ' + data.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error capturing screenshot: ' + error.message, 'danger');
+            }
+        }
+        
+        async function saveConfiguration() {
+            const config = {
+                parking_grid: [
+                    parseInt(document.getElementById('grid-x1').value),
+                    parseInt(document.getElementById('grid-y1').value),
+                    parseInt(document.getElementById('grid-x2').value),
+                    parseInt(document.getElementById('grid-y2').value)
+                ],
+                confidence_threshold: parseFloat(document.getElementById('confidence-threshold').value),
+                violation_buffer_time: parseFloat(document.getElementById('violation-buffer').value)
+            };
+            
+            try {
+                const response = await fetch('/api/update_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('Configuration updated successfully', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('configModal')).hide();
+                } else {
+                    showAlert('Failed to update configuration: ' + data.message, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error updating configuration: ' + error.message, 'danger');
+            }
+        }
+        
+        async function loadConfiguration() {
+            try {
+                const response = await fetch('/api/get_config');
+                const config = await response.json();
+                
+                document.getElementById('grid-x1').value = config.parking_grid[0];
+                document.getElementById('grid-y1').value = config.parking_grid[1];
+                document.getElementById('grid-x2').value = config.parking_grid[2];
+                document.getElementById('grid-y2').value = config.parking_grid[3];
+                document.getElementById('confidence-threshold').value = config.confidence_threshold;
+                document.getElementById('confidence-value').textContent = config.confidence_threshold;
+                document.getElementById('violation-buffer').value = config.violation_buffer_time;
+                document.getElementById('slot-length').value = config.slot_length_cm;
+            } catch (error) {
+                console.error('Error loading configuration:', error);
+            }
+        }
+        
+        // UI update functions
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            const textElement = document.getElementById('connection-text');
+            
+            if (connected) {
+                statusElement.className = 'status-indicator status-active';
+                textElement.textContent = 'Connected';
+            } else {
+                statusElement.className = 'status-indicator status-inactive';
+                textElement.textContent = 'Disconnected';
+            }
+        }
+        
+        function updateDetectionStatus(active) {
+            const statusElement = document.getElementById('detection-status');
+            statusElement.textContent = active ? 'Detection: Active' : 'Detection: Inactive';
+        }
+        
+        function updateStatistics(data) {
+            if (!data) return;
+            
+            document.getElementById('available-slots').textContent = data.available_slots || 0;
+            document.getElementById('vehicles-in-grid').textContent = data.vehicles_in_grid || 0;
+            document.getElementById('total-vehicles').textContent = data.total_vehicles || 0;
+            
+            if (data.violations) {
+                document.getElementById('potential-violations').textContent = data.violations.potential || 0;
+                document.getElementById('confirmed-violations').textContent = data.violations.confirmed || 0;
+            }
+            
+            if (data.performance) {
+                document.getElementById('fps-counter').textContent = `FPS: ${(data.performance.processing_fps || 0).toFixed(1)}`;
+                document.getElementById('perf-detection').textContent = `Detection: ${(data.performance.detection_ms || 0).toFixed(0)}ms`;
+                document.getElementById('perf-fps').textContent = `FPS: ${(data.performance.processing_fps || 0).toFixed(1)}`;
+            }
+        }
+        
+        function updateViolations(violations) {
+            if (!violations) return;
+            
+            const alertsContainer = document.getElementById('violation-alerts');
+            const detailsContainer = document.getElementById('violation-details');
+            
+            // Clear existing alerts
+            alertsContainer.innerHTML = '';
+            
+            // Show violation alert if there are confirmed violations
+            if (violations.confirmed > 0) {
+                const alert = document.createElement('div');
+                alert.className = 'violation-alert';
+                alert.innerHTML = `
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>VIOLATION DETECTED!</strong><br>
+                    ${violations.confirmed} confirmed violation(s) detected
+                `;
+                alertsContainer.appendChild(alert);
+            }
+            
+            // Update violation details
+            if (violations.details && violations.details.length > 0) {
+                detailsContainer.innerHTML = '';
+                violations.details.forEach(violation => {
+                    const item = document.createElement('div');
+                    item.className = 'violation-item';
+                    item.innerHTML = `
+                        <strong>Vehicle-${violation.track_id}</strong><br>
+                        Status: ${violation.status.toUpperCase()}<br>
+                        Duration: ${violation.duration.toFixed(1)}s
+                    `;
+                    detailsContainer.appendChild(item);
+                });
+            } else {
+                detailsContainer.innerHTML = '<p class="text-muted text-center">No active violations</p>';
+            }
+        }
+        
+        function updatePerformanceChart(performance) {
+            if (!performance || !performanceChart) return;
+            
+            const now = new Date().toLocaleTimeString();
+            const maxDataPoints = 20;
+            
+            // Add new data point
+            performanceChart.data.labels.push(now);
+            performanceChart.data.datasets[0].data.push(performance.processing_fps || 0);
+            performanceChart.data.datasets[1].data.push(performance.detection_ms || 0);
+            
+            // Remove old data points
+            if (performanceChart.data.labels.length > maxDataPoints) {
+                performanceChart.data.labels.shift();
+                performanceChart.data.datasets[0].data.shift();
+                performanceChart.data.datasets[1].data.shift();
+            }
+            
+            performanceChart.update('none');
+        }
+        
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('timestamp').textContent = now.toLocaleString();
+        }
+        
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            alertContainer.appendChild(alert);
+            
+            // Auto-remove alert after 5 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+        
+        // Handle video stream errors
+        document.getElementById('video-stream').addEventListener('error', function() {
+            this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMzMzIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhbWVyYSBOb3QgQXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
+        });
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && socket) {
+                socket.emit('request_stats');
+            }
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                switch(e.key) {
+                    case 's':
+                        e.preventDefault();
+                        captureScreenshot();
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        if (isDetectionActive) {
+                            stopDetection().then(() => {
+                                setTimeout(startDetection, 1000);
+                            });
+                        } else {
+                            startDetection();
+                        }
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
