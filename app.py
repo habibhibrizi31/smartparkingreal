@@ -381,7 +381,7 @@ def load_yolo_model():
         model_path = "best.pt"  # Place your model file in the same directory
         if not os.path.exists(model_path):
             logger.info("Using YOLOv8n model (will be downloaded automatically)")
-            model_path = 'yolov8n.pt'
+            model_path = 'best.pt'
         
         model = YOLO(model_path)
         model.fuse()
@@ -812,4 +812,5 @@ if __name__ == '__main__':
     if not os.path.exists('static'):
         os.makedirs('static')
     
+
     socketio.run(app, host='0.0.0.0', port=5000, debug=False)
